@@ -1,25 +1,25 @@
 import aiohttp
 import logging
 from decouple import config
+
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 API_URL = config("API_URL")
+CLIENT_NAME = config("CLIENT_NAME")
+CLIENT_PASSWORD = config("CLIENT_PASSWORD")
 
 async def register_user(phone_number: str):
-    """
-    Реєстрація користувача через API.
 
-    :param phone_number: Номер телефону користувача у форматі +380XXXXXXXXX
-    :return: Дані нового користувача (id, phone_number, api_key) або підняття винятку.
-    """
     url = f"{API_URL}registration/users/"
     payload = {"phone_number": phone_number}
+    headers = {"client-name": CLIENT_NAME,
+               "client-password": CLIENT_PASSWORD}
 
     try:
 
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session:
-            async with session.post(url, json=payload) as response:
+            async with session.post(url, json=payload, headers=headers) as response:
                 logger.info("Відправлено POST-запит до API: %s, дані: %s", url, payload)
                 logger.info("Статус відповіді: %s", response.status)
 
@@ -48,27 +48,53 @@ async def register_user(phone_number: str):
         raise ValueError("Непередбачена помилка виконання.")
 
 
-import httpx
 
-async def send_pdf_request_to_service(tg_id: str, api_key: str):
-    url = f"{API_URL}tg_request/generate_pdf/?tg_id={tg_id}"
+async def send_request_to_api(tg_id: str, request_data: str, command: str, api_key: str):
+    url = f"{API_URL}tg_request/generate_pdf/"
 
     headers = {
-        "api-key": api_key
+        "accept": "application/json",
+        "api-key": api_key,
     }
 
+    params = {
+        "tg_id": tg_id,
+        "request_data": request_data,
+        "command": command,
+    }
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, headers=headers, params=params) as response:
+                if response.status == 200:
+                    response_data = await response.json()
+                    return response_data
+                else:
+                    logger.error(f"Error {response.status}: {await response.text()}")
+                    return {"error": f"Request failed with status {response.status}"}
+    except Exception as e:
+        logger.error(f"Exception occurred: {e}")
+        return {"error": "An error occurred while making the request."}
+
+import httpx
+
+async def send_file_to_api(api_url: str, file_path: str, api_key: str):
+    headers = {
+        "accept": "application/json",
+        "api-key": api_key,
+    }
+    files = {
+        "file": (file_path, open(file_path, "rb"), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+    }
 
     async with httpx.AsyncClient() as client:
         try:
-            response = await client.post(url, headers=headers)
-
-            if response.status_code == 200:
-                result = response.json()
-                pdf_filename = result.get("pdf_filename")
-                pdf_base64 = result.get("pdf_base64")
-                return pdf_filename, pdf_base64
-            else:
-                return None, f"Помилка: {response.text}"
-
-        except Exception as e:
-            return None, f"Сталася помилка при зверненні до сервісу: {str(e)}"
+            response = await client.post(api_url, headers=headers, files=files, timeout=30)
+            response.raise_for_status()
+            return response.json()
+        except httpx.RequestError as e:
+            return {"error": f"Помилка запиту до API: {e}"}
+        except httpx.HTTPStatusError as e:
+            return {"error": f"Помилка статусу відповіді: {e.response.status_code} - {e.response.text}"}
+        finally:
+            files["file"][1].close()
