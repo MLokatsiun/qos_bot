@@ -17,7 +17,7 @@ async def main_menu_N(update: Update, context: CallbackContext):
     ]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
     await update.message.reply_text("👋 Привіт! Оберіть дію:", reply_markup=reply_markup)
-    return ConversationHandler.END  # Повертаємо стан, щоб ConversationHandler залишався активним
+    return ConversationHandler.END
 
 async def return_to_main_menu_n(update: Update, context: CallbackContext):
     await main_menu_N(update, context)
