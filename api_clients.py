@@ -49,7 +49,7 @@ async def register_user(phone_number: str):
 
 
 
-async def send_request_to_api(tg_id: str, request_data: str, command: str, api_key: str):
+async def send_request_to_api(tg_id: str, request_data: str, command: str, api_key: str, country: str):
     url = f"{API_URL}tg_request/generate_pdf/"
 
     headers = {
@@ -61,6 +61,7 @@ async def send_request_to_api(tg_id: str, request_data: str, command: str, api_k
         "tg_id": tg_id,
         "request_data": request_data,
         "command": command,
+        "country": country,
     }
 
     try:
@@ -98,3 +99,53 @@ async def send_file_to_api(api_url: str, file_path: str, api_key: str):
             return {"error": f"Помилка статусу відповіді: {e.response.status_code} - {e.response.text}"}
         finally:
             files["file"][1].close()
+
+async def send_request_to_api_shd(tg_id: str, request_data: str, command: str, api_key: str):
+    url = f"{API_URL}request/shd/"
+
+    headers = {
+        "accept": "application/json",
+        "api-key": api_key,
+    }
+
+    params = {
+        "tg_id": tg_id,
+        "request_data": request_data,
+        "command": command,
+    }
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, headers=headers, params=params) as response:
+                if response.status == 200:
+                    response_data = await response.json()
+                    return response_data
+                else:
+                    logger.error(f"Error {response.status}: {await response.text()}")
+                    return {"error": f"Request failed with status {response.status}"}
+    except Exception as e:
+        logger.error(f"Exception occurred: {e}")
+        return {"error": "An error occurred while making the request."}
+
+
+async def send_file_to_api_shd(api_url: str, file_path: str, api_key: str):
+    headers = {
+        "accept": "application/json",
+        "api-key": api_key,
+    }
+    files = {
+        "file": (file_path, open(file_path, "rb"), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+    }
+
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.post(api_url, headers=headers, files=files, timeout=30)
+            response.raise_for_status()
+            return response.json()
+        except httpx.RequestError as e:
+            return {"error": f"Помилка запиту до API: {e}"}
+        except httpx.HTTPStatusError as e:
+            return {"error": f"Помилка статусу відповіді: {e.response.status_code} - {e.response.text}"}
+        finally:
+            files["file"][1].close()
+

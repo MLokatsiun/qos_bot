@@ -6,20 +6,31 @@ from api_clients import send_file_to_api, API_URL
 
 logger = logging.getLogger(__name__)
 
-SELECT_SEARCH_TYPE, WAITING_FOR_FILE = range(2)
+SELECT_COUNTRY, WAITING_FOR_FILE = range(2)
 
 async def main_menu(update: Update, context: CallbackContext):
     """Головне меню з кнопками для вибору."""
     keyboard = [
         [KeyboardButton("🌟 Почати пошук")],
-        [KeyboardButton("📁 Шукати з файлу")]
+        [KeyboardButton("📁 Шукати з файлу")],
+        [KeyboardButton("🏠 Головне меню")],
     ]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
-    await update.message.reply_text("👋 Привіт! Оберіть дію:", reply_markup=reply_markup)
+    await update.message.reply_text("Оберіть дію:", reply_markup=reply_markup)
+
+
+async def main_menu_N(update: Update, context: CallbackContext):
+    """Головне меню з кнопками OSINT та Shodan."""
+    keyboard = [
+        [KeyboardButton("🕵️‍♂️ OSINT")],
+        [KeyboardButton("🌐 Shodan")],
+    ]
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
+    await update.message.reply_text("Оберіть дію:", reply_markup=reply_markup)
 
 
 async def return_to_main_menu(update: Update, context: CallbackContext):
-    """Повернення до головного меню після натискання кнопки 'Головне меню'."""
+    """Повернення до головного меню після натискання кнопки '◀️ Назад'."""
     await main_menu(update, context)
     return ConversationHandler.END
 
@@ -28,13 +39,17 @@ async def handle_file(update: Update, context: CallbackContext):
     """Отримання файлу та його надсилання в API."""
     tg_id = context.user_data.get("tg_id")
     api_key = context.user_data.get("api_key")
-    search_type = context.user_data.get("search_type")
+    country_code = context.user_data.get("country_code")
 
-    if update.message.text == "🏠 Головне меню":
+    if update.message.text == "🔙 Назад":
         await main_menu(update, context)
         return ConversationHandler.END
 
-    if not tg_id or not api_key or not search_type:
+    if update.message.text == "🏠 Головне меню":
+        await main_menu_N(update, context)
+        return ConversationHandler.END
+
+    if not tg_id or not api_key or not country_code:
         await update.message.reply_text("❗ Сталася помилка. Спробуйте почати пошук знову.")
         return ConversationHandler.END
 
@@ -56,10 +71,8 @@ async def handle_file(update: Update, context: CallbackContext):
         await update.message.reply_text("⚠️ Сталася помилка при завантаженні файлу. Спробуйте знову.")
         return WAITING_FOR_FILE
 
-    command = {"📝 telegram id": "#", "📱 телефон": "PHONE", "👤 фіо": "FIO"}.get(search_type.lower())
-
     try:
-        api_url = f"{API_URL}tg_request/generate_pdf/?tg_id={tg_id}&command={command}"
+        api_url = f"{API_URL}tg_request/generate_pdf/?tg_id={tg_id}&search_country={country_code}"
         response = await send_file_to_api(api_url, local_path, api_key)
     except Exception as e:
         logger.error(f"Помилка при виклику API: {e}")
@@ -74,48 +87,57 @@ async def handle_file(update: Update, context: CallbackContext):
         await update.message.reply_text("✅ Файл успішно оброблено.")
 
     keyboard = [
-        ["📝 Telegram ID", "📱 Телефон", "👤 ФІО"],
-        [KeyboardButton("🏠 Головне меню")]
+        [KeyboardButton("🇺🇦 Україна"), KeyboardButton("🇷🇺 Росія")],
+        [KeyboardButton("🔙 Назад"), KeyboardButton("🏠 Головне меню")]
     ]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
 
-    await update.message.reply_text("🔍 Оберіть параметр для пошуку або натисніть кнопку для головного меню:",
-                                    reply_markup=reply_markup)
+    await update.message.reply_text("🌍 Оберіть країну для нового пошуку або поверніться до меню:",
+                                   reply_markup=reply_markup)
 
-    return SELECT_SEARCH_TYPE
+    return SELECT_COUNTRY
 
 
-async def select_search_type(update: Update, context: CallbackContext):
-    """Обробка вибору параметра для пошуку."""
-    search_type = update.message.text.strip().lower()
+async def select_country(update: Update, context: CallbackContext):
+    country = update.message.text.strip().lower()
 
-    if search_type == "🏠 головне меню":
+    if country == "🔙 Назад":
         await main_menu(update, context)
         return ConversationHandler.END
 
-    if search_type in ["📝 telegram id", "📱 телефон", "👤 фіо"]:
-        context.user_data["search_type"] = search_type
+    if country == "🏠 головне меню":
+        await main_menu_N(update, context)
+        return ConversationHandler.END
+
+    country_mapping = {
+        "🇺🇦 україна": "UA",
+        "🇷🇺 росія": "RU"
+    }
+
+    if country in country_mapping:
+        context.user_data["country_code"] = country_mapping[country]
         await update.message.reply_text(
-            f"✅ Ви обрали пошук за '{search_type}'. Тепер надішліть Excel файл (Переконайтеся колонка з запитами має назву 'request_param').",
+            f"✅ Ви обрали пошук у країні '{country}'. Тепер надішліть Excel файл у форматі: \n"
+            "id | ФИО | ИНН | НОМЕР ТЕЛЕФОНА | TG_ID | FACEBOOK_ID | VK_ID",
             reply_markup=ReplyKeyboardRemove(),
         )
 
         keyboard = [
-            [KeyboardButton("🏠 Головне меню")]
+            [KeyboardButton("🔙 Назад"), KeyboardButton("🏠 Головне меню")]
         ]
         reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
         await update.message.reply_text(
-            "🔍 Оберіть параметр для пошуку або натисніть кнопку для головного меню:",
+            "🔍 Надішліть файл або поверніться до головного меню:",
             reply_markup=reply_markup
         )
         return WAITING_FOR_FILE
     else:
-        await update.message.reply_text("❌ Будь ласка, виберіть коректний параметр для пошуку.")
-        return SELECT_SEARCH_TYPE
+        await update.message.reply_text("❌ Будь ласка, виберіть коректну країну для пошуку.")
+        return SELECT_COUNTRY
 
 
 async def start_search_from_file(update: Update, context: CallbackContext):
-    """Початок пошуку: вибір параметра для пошуку."""
+    """Початок пошуку: вибір країни для пошуку."""
     tg_id = str(update.message.from_user.id)
     context.user_data["tg_id"] = tg_id
 
@@ -130,21 +152,23 @@ async def start_search_from_file(update: Update, context: CallbackContext):
         return ConversationHandler.END
 
     await update.message.reply_text(
-        "🔍 Виберіть параметр для пошуку:",
+        "🌍 Виберіть країну для пошуку:",
         reply_markup=ReplyKeyboardMarkup(
-            [["📝 Telegram ID", "📱 Телефон", "👤 ФІО"], ["🏠 Головне меню"]],
+            [[KeyboardButton("🇺🇦 Україна"), KeyboardButton("🇷🇺 Росія")], ["🔙 Назад", "🏠 Головне меню"]],
             resize_keyboard=True,
             one_time_keyboard=True,
         ),
     )
-    return SELECT_SEARCH_TYPE
-
+    return SELECT_COUNTRY
 
 conversation_handler = ConversationHandler(
     entry_points=[MessageHandler(filters.TEXT & filters.Regex("^📁 Шукати з файлу$"), start_search_from_file)],
     states={
-        SELECT_SEARCH_TYPE: [MessageHandler(filters.TEXT & ~filters.COMMAND, select_search_type)],
+        SELECT_COUNTRY: [
+            MessageHandler(filters.TEXT & filters.Regex("^🔙 Назад$"), return_to_main_menu),
+            MessageHandler(filters.TEXT & ~filters.COMMAND, select_country),
+        ],
         WAITING_FOR_FILE: [MessageHandler(filters.Document.ALL, handle_file)],
     },
-    fallbacks=[MessageHandler(filters.TEXT & filters.Regex("^🏠 Головне меню$"), return_to_main_menu)],
+    fallbacks=[MessageHandler(filters.TEXT & filters.Regex("^🔙 Назад$"), return_to_main_menu)]
 )
