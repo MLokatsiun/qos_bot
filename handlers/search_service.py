@@ -71,11 +71,12 @@ async def handle_country(update: Update, context: CallbackContext):
     }
 
     if country in country_mapping:
-        context.user_data["country"] = country_mapping[country]  # Зберігаємо код країни
+        context.user_data["country"] = country_mapping[country]
         keyboard = [
-            [KeyboardButton("🔍 Шукати по Telegram ID"),
-             KeyboardButton("📱 Шукати по телефону"),
+            [KeyboardButton("🔍 Шукати по Telegram ID"), KeyboardButton("📱 Шукати по телефону"),
              KeyboardButton("👤 Шукати по ФІО")],
+            [KeyboardButton("🆔 Шукати по ІПН"), KeyboardButton("📘 Шукати по FACEBOOK ID"),
+             KeyboardButton("🔵 Шукати по VK ID")],
             [KeyboardButton("🌍 Змінити країну пошуку"), KeyboardButton("🔙 Назад"), KeyboardButton("🏠 Головне меню")]
         ]
         reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
@@ -128,12 +129,13 @@ async def handle_request_data(update: Update, context: CallbackContext):
         await update.message.reply_text(f"✅ Запит успішно надіслано.\n\nRequest IDs: {request_ids}")
 
     keyboard = [
-        [KeyboardButton("🔍 Шукати по Telegram ID"),
-         KeyboardButton("📱 Шукати по телефону"),
+        [KeyboardButton("🔍 Шукати по Telegram ID"), KeyboardButton("📱 Шукати по телефону"),
          KeyboardButton("👤 Шукати по ФІО")],
+        [KeyboardButton("🆔 Шукати по ІПН"), KeyboardButton("📘 Шукати по FACEBOOK ID"),
+         KeyboardButton("🔵 Шукати по VK ID")],
         [KeyboardButton("🌍 Змінити країну пошуку"), KeyboardButton("🔙 Назад"), KeyboardButton("🏠 Головне меню")]
     ]
-    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
 
     await update.message.reply_text("Оберіть, що робити далі:", reply_markup=reply_markup)
 
@@ -153,6 +155,15 @@ async def handle_search_type(update: Update, context: CallbackContext):
     elif search_type == '👤 шукати по фіо':
         await update.message.reply_text("👤 Будь ласка, введіть ФІО для пошуку.")
         context.user_data["search_type"] = "FIO"
+    elif search_type == '🆔 шукати по іпн':
+        await update.message.reply_text("Будь ласка, введіть ІПН для пошуку")
+        context.user_data["search_type"] = "INN"
+    elif search_type == '📘 шукати по facebook id':
+        await update.message.reply_text("Будь ласка, введіть facebook id для пошуку")
+        context.user_data["search_type"] = "FB_ID"
+    elif search_type == '🔵 шукати по vk id':
+        await update.message.reply_text("Будь ласка, введіть vk id для пошуку")
+        context.user_data["search_type"] = "VK_ID"
     elif search_type == '🔙 назад':
         await main_menu(update, context)
         return ConversationHandler.END
