@@ -29,7 +29,7 @@ python main.py
 ## Features
 ### Main Commands:
 - `/start` – Start the bot
-- `/register` – Register a user
+- Register a user
 - OSINT search
 - Shodan search
 - PDF file search
